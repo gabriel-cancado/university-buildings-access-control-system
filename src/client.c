@@ -17,10 +17,10 @@ int create_socket(struct sockaddr_storage* storage) {
     int is_ipv4 = storage->ss_family == AF_INET;
 }
 
-int openConnection(char* server_addr_str, char* server_port_str) {
+int open_connection(char* server_addr_str, char* server_port_str) {
     struct sockaddr_storage storage;
     int success = addr_parse(server_addr_str, server_port_str, &storage) == 0;
-    if (!success) log_exit("Invalid server address. Valid types are IPv4 and IPv6\n");
+    if (success == -1) log_exit("Invalid server address. Valid types are IPv4 and IPv6");
 
     int soc = socket(storage.ss_family, SOCK_STREAM, 0);
     if (soc == -1) log_exit("Error creating socket");
@@ -37,8 +37,8 @@ void main (int argc, char** argv) {
     int loc_id = atoi(argv[4]);
     if (loc_id < 0 || loc_id > 10) error_exit("Invalid argument");
 
-    int users_server_socket = openConnection(argv[1], argv[2]);
-    int loc_server_socket = openConnection(argv[1], argv[3]);
+    int users_server_socket = open_connection(argv[1], argv[2]);
+    int loc_server_socket = open_connection(argv[1], argv[3]);
 
     while(1) {};
 }

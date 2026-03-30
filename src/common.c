@@ -10,14 +10,14 @@ void error_exit(char* msg) {
 }
 
 void log_exit(char* msg) {
-    perror(msg);
+    perror(msg + '\n');
     exit(EXIT_FAILURE);
 }
 
 int addr_parse(char* addr_str, char* port_str, struct sockaddr_storage *storage) {
     if (addr_str == NULL || port_str == NULL) return -1;
 
-    uint16_t port = (uint16_t)atoi(port_str); // port numbers are 16 bits
+    uint16_t port = (uint16_t) atoi(port_str); // port numbers are 16 bits
     if (port == 0) return -1;
 
     port = htons(port); // host to network short
