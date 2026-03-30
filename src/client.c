@@ -22,8 +22,13 @@ int openConnection(char* server_addr_str, char* server_port_str) {
     int success = addr_parse(server_addr_str, server_port_str, &storage) == 0;
     if (!success) log_exit("Invalid server address. Valid types are IPv4 and IPv6\n");
 
-    int s = socket(storage.ss_family, SOCK_STREAM, 0);
-    if (s == -1) log_exit("Error creating socket");
+    int soc = socket(storage.ss_family, SOCK_STREAM, 0);
+    if (soc == -1) log_exit("Error creating socket");
+
+    success = connect(soc, &storage, sizeof(storage));
+    if (!success) log_exit("Could not connect to server " + *server_addr_str + ':' + *server_port_str);
+
+    return soc;
 }
 
 void main (int argc, char** argv) {
@@ -33,4 +38,7 @@ void main (int argc, char** argv) {
     if (loc_id < 0 || loc_id > 10) error_exit("Invalid argument");
 
     int users_server_socket = openConnection(argv[1], argv[2]);
+    int loc_server_socket = openConnection(argv[1], argv[3]);
+
+    while(1) {};
 }
