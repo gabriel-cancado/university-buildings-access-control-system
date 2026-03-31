@@ -3,9 +3,13 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <inttypes.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 #include "../include/common.h"
+
+#define MAX_AMOUNT_OF_PEERS 1
 
 void usage_exit(int argc, char** argv) {
     char* progam_name = argv[0];
@@ -43,22 +47,37 @@ int create_socket() {
     return soc;
 }
 
-void open_p2p_connection(int* socket, char* port_str) {
+int open_p2p_connection(int* soc, char* port_str) {
     struct sockaddr_in6 addr6;
     int success = server_sockaddr_init(&addr6, port_str);
     if (success == -1) log_exit("Invalid port number");
 
-    // If the connection was estabilished, that means that the other server was already running
-    success = connect(*socket, (struct sockaddr*) &addr6, sizeof(addr6));
-    if (success == -1) {
-        printf("No peer found, starting to listen...\n");
-        return;
+    success = connect(*soc, (struct sockaddr*) &addr6, sizeof(addr6));
+    if (success == 0) {
+        printf("Peer connected\n");
+        return *soc;
     }
+
+    // If the connection was not estabilished, that means that the other server is not running yet
+    printf("No peer found, starting to listen...\n");
+
+    success = bind(*soc, (struct sockaddr*) &addr6, sizeof(addr6));
+    if (success == -1) log_exit("Could not bind p2p socket to IP address");
+
+    success = listen(*soc, MAX_AMOUNT_OF_PEERS);
+    if (success == -1) log_exit("Could not listen on p2p socket");
+
+    struct sockaddr peer_addr;
+    socklen_t peer_addr_len = sizeof(peer_addr);
+    int new_soc = accept(*soc, &peer_addr, &peer_addr_len);
+
+    printf("Peer connected\n");
+    return new_soc;
 }
 
 void main(int argc, char** argv) {
     if (argc < 3) usage_exit(argc, argv);
 
     int p2p_socket = create_socket();
-    open_p2p_connection(&p2p_socket, argv[1]);
+    p2p_socket = open_p2p_connection(&p2p_socket, argv[1]);
 }
