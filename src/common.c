@@ -4,13 +4,15 @@
 #include <inttypes.h>
 #include <arpa/inet.h>
 
+#include "../include/common.h"
+
 void error_exit(char* msg) {
     printf("%s\n", msg);
     exit(EXIT_FAILURE);
 }
 
 void log_exit(char* msg) {
-    perror(msg + '\n');
+    perror(msg);
     exit(EXIT_FAILURE);
 }
 
@@ -41,4 +43,17 @@ int addr_parse(char* addr_str, char* port_str, struct sockaddr_storage *storage)
     }
 
     return -1;
+}
+
+message send_message(int* soc, message msg, bool should_wait_response) {
+    int sended_bytes = send(*soc, &msg, sizeof(msg), 0);
+    if (sended_bytes == -1) log_exit("Error sending message");
+
+    message response = { .code = EMPTY };
+    if (!should_wait_response) return response;
+    
+    int received_bytes = recv(*soc, &response, sizeof(response), 0);
+    if (received_bytes == -1) log_exit("Error receiving message");
+
+    return response;
 }
