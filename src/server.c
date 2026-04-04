@@ -15,6 +15,13 @@
 
 int peers_connected_count = 0;
 
+typedef struct {
+    bool connected;
+    int peer_id;
+    int id_on_peer;
+    int soc;
+} p2p_connection_info;
+
 void usage_exit(int argc, char** argv) {
     char* progam_name = argv[0];
     printf("usage: %s <peer-2-peer port> <clients port>\n", progam_name);
@@ -54,15 +61,18 @@ int create_socket() {
     return soc;
 }
 
-int request_connection_to_peer(int *soc, struct sockaddr_in6 *addr6) {
-    int success = connect(*soc, (struct sockaddr*) addr6, sizeof(*addr6));
-    if (success == -1) return -1;
+p2p_connection_info request_connection_to_peer(int soc, struct sockaddr_in6 addr6) {
+    int success = connect(soc, (struct sockaddr*) &addr6, sizeof(addr6));
+    if (success == -1) {
+        p2p_connection_info no_peer = { .connected = false };
+        return no_peer;
+    }
     
     message request = { .code = REQ_CONNPEER };
-    message response = send_message(soc, request, true);
 
+    message response = send_message(soc, request, true);
     if (response.code == ERROR) {
-        printf("%s", response.payload.description);
+        printf("%s\n", response.payload.description);
         exit(EXIT_FAILURE);
     }
 
@@ -80,20 +90,27 @@ int request_connection_to_peer(int *soc, struct sockaddr_in6 *addr6) {
 
     printf("Peer %d connected\n", peer_id);
     peers_connected_count++;
-    return peer_id;
+
+    p2p_connection_info connection_info = { 
+        .connected = true,
+        .id_on_peer = server_id_on_peer,
+        .peer_id = peer_id,
+        soc: soc
+    };
+    return connection_info;
 }
 
-int listen_for_p2p_connections(int* soc, struct sockaddr_in6 *addr6) {
-    int success = bind(*soc, (struct sockaddr*) addr6, sizeof(*addr6));
+int listen_for_p2p_connections(int soc, struct sockaddr_in6 addr6) {
+    int success = bind(soc, (struct sockaddr*) &addr6, sizeof(addr6));
     if (success == -1) log_exit("Could not bind p2p socket to IP address");
 
-    success = listen(*soc, CONNECTION_QUEUE_MAX_LENGTH);
+    success = listen(soc, CONNECTION_QUEUE_MAX_LENGTH);
     if (success == -1) log_exit("Could not listen on p2p socket");
 
     printf("No peer found, starting to listen...\n");
 }
 
-int handle_pairing_requests(int listener_socket, int* peer_communication_socket) {
+p2p_connection_info handle_pairing_requests(int listener_socket) {
     int new_peer_socket = accept(listener_socket, NULL, NULL);
     if (new_peer_socket == -1) log_exit("Error accepting connection from peer");
 
@@ -107,13 +124,15 @@ int handle_pairing_requests(int listener_socket, int* peer_communication_socket)
         message msg = {
             .code = ERROR,
             .payload = {
-                .description = "Peer limit exceeded\n"
+                .description = "Peer limit exceeded"
             }
         };
         
-        send_message(&new_peer_socket, msg, false);
+        send_message(new_peer_socket, msg, false);
         close(new_peer_socket);
-        return -1;
+
+        p2p_connection_info no_peer = { .connected = false };
+        return no_peer;
     }
 
     int peer_id = generate_random_id();
@@ -125,70 +144,135 @@ int handle_pairing_requests(int listener_socket, int* peer_communication_socket)
             .peer_id = peer_id
         }
     };
-    message response = send_message(&new_peer_socket, msg, true);
+    message response = send_message(new_peer_socket, msg, true);
 
+    int id_on_peer = response.payload.peer_id;
     printf("New Peer ID: %d\n", response.payload.peer_id);
-    
-    *peer_communication_socket = new_peer_socket;
     peers_connected_count++;
-    return peer_id;
+    
+    p2p_connection_info connection_info = {
+        .connected = true,
+        .id_on_peer = id_on_peer,
+        .peer_id = peer_id,
+        .soc = new_peer_socket
+    };
+    return connection_info;
 }
 
-void handle_requests_loop(int peer_communication_socket, int p2p_connections_listener_socket) {
+void handle_keyboard_entry(p2p_connection_info peer_connection_info, int p2p_connections_listener_socket) {
+    char buffer[1024];
+    fgets(buffer, sizeof(buffer), stdin);
+
+    if (strcmp(buffer, "kill\n") == 0) {
+        message msg = {
+            .code = REQ_DISCPEER,
+            .payload = {
+                .peer_id = peer_connection_info.id_on_peer
+            }
+        };
+
+        message response = send_message(peer_connection_info.soc, msg, true);
+        if (response.code == ERROR) {
+            printf("%s\n", response.payload.description);
+            exit(EXIT_FAILURE);
+        }
+
+        if (response.code != OK) log_exit("Unexpected response code");
+
+        printf("%s\n", response.payload.description);
+        printf("Peer %d disconnected\n", peer_connection_info.peer_id);
+
+        close(p2p_connections_listener_socket);
+        exit(EXIT_SUCCESS);
+    }
+}
+
+void handle_request_from_peer(p2p_connection_info* peer_connection_info) {
+    message request;
+    int received_bytes = recv(peer_connection_info->soc, &request, sizeof(request), 0);
+    if (received_bytes == -1) log_exit("Error receiving message");
+
+    if (request.code == REQ_DISCPEER) {
+        int disconnect_requested_id = request.payload.peer_id;
+        if (disconnect_requested_id != peer_connection_info->peer_id) {
+            message msg = {
+                .code = ERROR,
+                .payload = {
+                    .description = "Peer not found"
+                }
+            };
+            send_message(peer_connection_info->soc, msg, false);
+            return;
+        }
+
+        message msg = {
+            .code = OK,
+            .payload = {
+                .description = "Successful disconnect"
+            }
+        };
+        send_message(peer_connection_info->soc, msg, false);
+
+        printf("Peer %d disconnected\n", peer_connection_info->peer_id);
+
+        peer_connection_info->connected = false;
+        close(peer_connection_info->soc);
+        peers_connected_count--;
+        return;
+    }
+}
+
+void monitored_sockets_init(fd_set* monitored_sockets, p2p_connection_info peer_connection_info, int p2p_connections_listener_socket) {
+    FD_ZERO(monitored_sockets);
+
+    bool isConnectedToPeer = peer_connection_info.connected;
+    if (isConnectedToPeer) {
+        FD_SET(peer_connection_info.soc, monitored_sockets);
+    }
+
+    bool serverIsListeningForConnectionRequests = p2p_connections_listener_socket != -1;
+    if (serverIsListeningForConnectionRequests) {
+        FD_SET(p2p_connections_listener_socket, monitored_sockets);
+    }
+
+    FD_SET(STDIN_FILENO, monitored_sockets);
+}
+
+void handle_requests_loop(p2p_connection_info peer_connection_info, int p2p_connections_listener_socket, struct sockaddr_in6 p2p_server_addr) {
     /**
      * The select function is a synchronous call that blocks the current running process.
      * It works by monitoring a set of sockets and putting then to sleep. When one of those sockets receives
      * a message, it puts that message in a queue and wake up this socket, unblocking the process.
      */
-    fd_set monitored_sockets;
-    FD_ZERO(&monitored_sockets);
-    
-    FD_SET(peer_communication_socket, &monitored_sockets);
-    if (p2p_connections_listener_socket != -1) {
-        FD_SET(p2p_connections_listener_socket, &monitored_sockets);
-    }
-
-    // TODO: Remove keyboard inputs in server processes.
-    int keyboard_fd = STDIN_FILENO;
-    FD_SET(keyboard_fd, &monitored_sockets);
-
     while(1) {
-        fd_set sleeping_sockets = monitored_sockets;
+        fd_set monitored_sockets;
+        monitored_sockets_init(&monitored_sockets, peer_connection_info, p2p_connections_listener_socket);
         
-        int activity = select(FD_SETSIZE, &sleeping_sockets, NULL, NULL, NULL);
+        int activity = select(FD_SETSIZE, &monitored_sockets, NULL, NULL, NULL);
 
-        if (FD_ISSET(keyboard_fd, &sleeping_sockets)) {
-            char buffer[1024];
-            fgets(buffer, sizeof(buffer), stdin);
+        bool isRequestToPair = p2p_connections_listener_socket != -1 && FD_ISSET(p2p_connections_listener_socket, &monitored_sockets);
+        if (isRequestToPair) {
+            p2p_connection_info pair_result = handle_pairing_requests(p2p_connections_listener_socket);
+            if (pair_result.connected == false) continue;
 
-            printf("Sending message: %s\n", buffer);
-            
-            // Envia para o outro servidor
-            int bytes_enviados = send(peer_communication_socket, buffer, strlen(buffer), 0);
-            if (bytes_enviados == -1) {
-                perror("Erro critico no send"); // perror imprime o motivo exato do erro do SO
-            } else {
-                printf(">> O Sistema Operacional confirmou o envio de %d bytes.\n", bytes_enviados);
-            }
+            peer_connection_info = pair_result;
         }
 
-        if (FD_ISSET(peer_communication_socket, &sleeping_sockets)) {
-            char buffer[1024];
-            int bytes_recebidos = recv(peer_communication_socket, buffer, sizeof(buffer), 0);
-            
-            if (bytes_recebidos == 0) {
-                // O outro servidor fechou a conexão (Ctrl+C ou encerrou)
-                printf("Conexão encerrada pelo peer.\n");
-                break; 
-            } else if (bytes_recebidos > 0) {
-                // Imprime a mensagem recebida na tela
-                buffer[bytes_recebidos] = '\0'; // Garante o fim da string
-                printf("Mensagem recebida: %s\n", buffer);
-            }
+        bool isKeyboardEntry = FD_ISSET(STDIN_FILENO, &monitored_sockets);
+        if (isKeyboardEntry) {
+            handle_keyboard_entry(peer_connection_info, p2p_connections_listener_socket);
         }
 
-        if (p2p_connections_listener_socket != -1 && FD_ISSET(p2p_connections_listener_socket, &sleeping_sockets)) {
-            handle_pairing_requests(p2p_connections_listener_socket, NULL);
+        bool isRequestFromPeer = FD_ISSET(peer_connection_info.soc, &monitored_sockets);
+        if (isRequestFromPeer) {
+            handle_request_from_peer(&peer_connection_info);
+
+            bool peer_disconnected = !peer_connection_info.connected;
+            if (peer_disconnected && p2p_connections_listener_socket == -1) {
+                p2p_connections_listener_socket = create_socket();
+                // TODO: BUG - Could not bind p2p socket to IP address: Address already in use
+                listen_for_p2p_connections(p2p_connections_listener_socket, p2p_server_addr);
+            }
         }
     }
 }
@@ -217,17 +301,14 @@ void main(int argc, char** argv) {
      * if there isn't one, we start listening for incoming pairing requests.
      */
     int p2p_openning_connection_socket = create_socket();
-    int peer_id = request_connection_to_peer(&p2p_openning_connection_socket, &p2p_server_addr);
+    p2p_connection_info peer_connection_info  = request_connection_to_peer(p2p_openning_connection_socket, p2p_server_addr);
 
-    if (peer_id != -1) {
-        peer_communication_socket = p2p_openning_connection_socket;
-    }
-    else {
+    if (!peer_connection_info.connected) {
         p2p_connections_listener_socket = p2p_openning_connection_socket;
-        listen_for_p2p_connections(&p2p_connections_listener_socket, &p2p_server_addr);
+        listen_for_p2p_connections(p2p_connections_listener_socket, p2p_server_addr);
 
-        peer_id = handle_pairing_requests(p2p_connections_listener_socket, &peer_communication_socket);
+        peer_connection_info = handle_pairing_requests(p2p_connections_listener_socket);
     }
 
-    handle_requests_loop(peer_communication_socket, p2p_connections_listener_socket);
+    handle_requests_loop(peer_connection_info, p2p_connections_listener_socket, p2p_server_addr);
 }
