@@ -276,6 +276,12 @@ void handle_requests_loop(p2p_connection_info peer_connection_info, int p2p_conn
             if (peer_disconnected && p2p_connections_listener_socket == -1) {
                 p2p_connections_listener_socket = create_socket();
                 listen_for_p2p_connections(p2p_connections_listener_socket, p2p_server_addr);
+            } else if (peer_disconnected) {
+                /**
+                 * The specifications require this to be printed to the console, but in this case the server already
+                 * had a socket listening for connections, so we don`t need to open another one.
+                 */
+                printf("No peer found, starting to listen...\n");
             }
         }
     }
