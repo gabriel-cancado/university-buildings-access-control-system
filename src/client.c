@@ -13,10 +13,6 @@ void usage_exit(int argc, char** argv) {
     exit(EXIT_FAILURE);
 }
 
-int create_socket(struct sockaddr_storage* storage) {
-    int is_ipv4 = storage->ss_family == AF_INET;
-}
-
 int open_connection(char* server_addr_str, char* server_port_str) {
     struct sockaddr_storage storage;
     int success = addr_parse(server_addr_str, server_port_str, &storage) == 0;

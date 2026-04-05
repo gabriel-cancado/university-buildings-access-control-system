@@ -1,6 +1,16 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <inttypes.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <time.h>
 
 #define MAX_USERS 30;
 #define MAX_CLIENTS 10;
@@ -62,6 +72,13 @@ typedef struct {
     int last_location;
 } user_loc;
 
+typedef struct {
+    bool connected;
+    int peer_id;
+    int id_on_peer;
+    int soc;
+} p2p_connection_info;
+
 void error_exit(char* msg);
 
 void log_exit(char* msg);
@@ -72,3 +89,5 @@ void log_exit(char* msg);
 int addr_parse(char* addr_str, char* port_str, struct sockaddr_storage *storage);
 
 message send_message(int soc, message msg, bool should_wait_response);
+
+int generate_random_id();

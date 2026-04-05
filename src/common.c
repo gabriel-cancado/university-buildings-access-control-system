@@ -57,3 +57,7 @@ message send_message(int soc, message msg, bool should_wait_response) {
 
     return response;
 }
+
+int generate_random_id() {
+    return (rand() % 9000) + 1000;
+}
