@@ -164,6 +164,12 @@ void handle_keyboard_entry(p2p_connection_info peer_connection_info, int p2p_con
     fgets(buffer, sizeof(buffer), stdin);
 
     if (strcmp(buffer, "kill\n") == 0) {
+        /**
+         * Closing connections listener socket before REQ_DISCPEER so that the other server
+         * can start to listen for connections in the same address.
+         */
+        close(p2p_connections_listener_socket);
+
         message msg = {
             .code = REQ_DISCPEER,
             .payload = {
@@ -182,7 +188,6 @@ void handle_keyboard_entry(p2p_connection_info peer_connection_info, int p2p_con
         printf("%s\n", response.payload.description);
         printf("Peer %d disconnected\n", peer_connection_info.peer_id);
 
-        close(p2p_connections_listener_socket);
         exit(EXIT_SUCCESS);
     }
 }
@@ -270,7 +275,6 @@ void handle_requests_loop(p2p_connection_info peer_connection_info, int p2p_conn
             bool peer_disconnected = !peer_connection_info.connected;
             if (peer_disconnected && p2p_connections_listener_socket == -1) {
                 p2p_connections_listener_socket = create_socket();
-                // TODO: BUG - Could not bind p2p socket to IP address: Address already in use
                 listen_for_p2p_connections(p2p_connections_listener_socket, p2p_server_addr);
             }
         }
