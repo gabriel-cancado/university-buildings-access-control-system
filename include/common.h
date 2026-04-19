@@ -103,6 +103,7 @@ void log_exit(char* msg);
 int addr_parse(char* addr_str, char* port_str, struct sockaddr_storage *storage);
 
 message send_message(int soc, message msg, bool should_wait_response);
+message receive_message(int soc);
 
 int generate_random_id();
 

@@ -56,9 +56,7 @@ void handle_keyboard_entry(p2p_connection_info peer_connection_info, int p2p_con
 }
 
 void handle_request_from_peer(p2p_connection_info* peer_connection_info) {
-    message request;
-    int received_bytes = recv(peer_connection_info->soc, &request, sizeof(request), 0);
-    if (received_bytes == -1) log_exit("Error receiving message");
+    message request = receive_message(peer_connection_info->soc);
 
     if (request.code == REQ_DISCPEER) {
         handle_REQDISCPEER(peer_connection_info, request);
@@ -100,7 +98,7 @@ int add_client(clients_connection_info* clients_info, int loc, int soc) {
         .soc = soc
     };
 
-    clients_info->clients[clients_info->connected_clients - 1] = new_client;
+    clients_info->clients[clients_info->connected_clients] = new_client;
     clients_info->connected_clients++;
 
     printf("Client %d added (Loc %d)\n", new_client_id, loc);
@@ -122,10 +120,7 @@ void handle_client_connection_request(clients_connection_info* clients_info) {
         return;
     }
 
-    message request;
-    int received_bytes = recv(new_client_socket, &request, sizeof(request), 0);
-    if (received_bytes == -1) log_exit("Error receiving message");
-
+    message request = receive_message(new_client_socket);
     if (request.code != REQ_CONN) log_exit("Error: Client tried to communicate before REQ_CONN");
 
     int locId = request.payload.loc_id;
@@ -140,6 +135,15 @@ void handle_client_connection_request(clients_connection_info* clients_info) {
         }
     };
     send_message(new_client_socket, response, false);
+}
+
+void handle_client_request(clients_connection_info* clients_info, int clientIndex) {
+    client c = clients_info->clients[clientIndex];
+    message request = receive_message(c.soc);
+
+    if (request.code == REQ_DISC) {
+        handle_REQDISC(clients_info, c, request);
+    }
 }
 
 void handle_requests_loop(
@@ -159,17 +163,22 @@ void handle_requests_loop(
         
         int activity = select(FD_SETSIZE, &monitored_sockets, NULL, NULL, NULL);
 
+        /**
+         * p2p communication
+         */
         bool isRequestToPair = p2p_connections_listener_socket != -1 && FD_ISSET(p2p_connections_listener_socket, &monitored_sockets);
         if (isRequestToPair) {
             p2p_connection_info pair_result = handle_pairing_requests(p2p_connections_listener_socket);
             if (pair_result.connected == false) continue;
 
             peer_connection_info = pair_result;
+            continue;
         }
 
         bool isKeyboardEntry = FD_ISSET(STDIN_FILENO, &monitored_sockets);
         if (isKeyboardEntry) {
             handle_keyboard_entry(peer_connection_info, p2p_connections_listener_socket);
+            continue;
         }
 
         bool isRequestFromPeer = FD_ISSET(peer_connection_info.soc, &monitored_sockets);
@@ -185,11 +194,25 @@ void handle_requests_loop(
                     listen_for_connections(p2p_connections_listener_socket, p2p_server_addr);
                 }
             }
+
+            continue;
         }
 
+        /**
+         * client-server communication
+         */
         bool isClientRequestingConnection = FD_ISSET(clients_info.connections_listener_socket, &monitored_sockets);
         if (isClientRequestingConnection) {
             handle_client_connection_request(&clients_info);
+            continue;
+        }
+
+        for (int i = 0; i < clients_info.connected_clients; i++) {
+            bool isClientRequest = FD_ISSET(clients_info.clients[i].soc, &monitored_sockets);
+            if (isClientRequest) {
+                handle_client_request(&clients_info, i);
+                break;
+            }
         }
     }
 }

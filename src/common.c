@@ -62,6 +62,14 @@ message send_message(int soc, message msg, bool should_wait_response) {
     return response;
 }
 
+message receive_message(int soc) {
+    message msg;
+    int received_bytes = recv(soc, &msg, sizeof(msg), 0);
+    if (received_bytes == -1) log_exit("Error receiving message");
+
+    return msg;
+}
+
 int generate_random_id() {
     return (rand() % 9000) + 1000;
 }

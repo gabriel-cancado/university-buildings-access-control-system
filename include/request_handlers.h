@@ -8,3 +8,5 @@ p2p_connection_info request_connection_to_peer(int soc, struct sockaddr_in6 addr
 void kill_p2p_connection(p2p_connection_info peer_connection_info, int p2p_connections_listener_socket);
 
 void handle_REQDISCPEER (p2p_connection_info* peer_connection_info, message request);
+
+void handle_REQDISC(clients_connection_info* clients_info, client c, message request);

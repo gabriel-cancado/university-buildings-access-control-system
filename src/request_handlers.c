@@ -148,3 +148,42 @@ void handle_REQDISCPEER (p2p_connection_info* peer_connection_info, message requ
     peers_connected_count--;
     return;
 }
+
+void remove_client(clients_connection_info* clients_info, int client_id) {
+    int client_index = -1;
+    for (int i = 0; i < clients_info->connected_clients; i++) {
+        if (clients_info->clients[i].id != client_id) continue;
+        client_index = i;
+    }
+
+    if (client_index == -1) log_exit("Client not found");
+
+    close(clients_info->clients[client_index].soc);
+    for (int i = client_index; i < clients_info->connected_clients - 1; i++) {
+        clients_info->clients[i] = clients_info->clients[i + 1];
+    }
+    clients_info->connected_clients--;
+}
+
+void handle_REQDISC(clients_connection_info* clients_info, client c, message request) {
+    bool isSameId = request.payload.client_id == c.id;
+    if (!isSameId) {
+        message response = {
+            .code = ERROR,
+            .payload = { .description_code = 10 }
+        };
+
+        send_message(c.soc, response, false);
+        return;
+    }
+
+    message response = {
+        .code = OK,
+        .payload = { .description_code = 1 }
+    };
+
+    send_message(c.soc, response, false);
+
+    remove_client(clients_info, c.id);
+    printf("Client %d removed (Loc %d)\n", c.id, c.loc);
+}

@@ -46,7 +46,7 @@ server_connection_info open_connection(char* server_addr_str, char* server_port_
     return connection_info;
 }
 
-message kill_connection(server_soc, client_id) {
+int kill_connection(int server_soc, int client_id, char* server_name) {
     message disconnect_request = {
         .code = REQ_DISC,
         .payload = {
@@ -54,23 +54,27 @@ message kill_connection(server_soc, client_id) {
         }
     };
 
-    return send_message(server_soc, disconnect_request, true);
+    message response = send_message(server_soc, disconnect_request, true);
+
+    if (response.code == ERROR) {
+        printf("%s", get_message_description(ERROR, response.payload.description_code));
+        return -1;
+    }
+
+    if (response.code != OK) log_exit("Invalid response code");
+
+    char* msg_description = get_message_description(OK, response.payload.description_code);
+    printf("%s %s\n", server_name, msg_description);
+
+    close(server_soc);
+    return 0;
 }
 
 void kill(server_connection_info users_server_connection_info, server_connection_info loc_server_connection_info) {
-    message users_server_response = kill_connection(users_server_connection_info.soc, users_server_connection_info.id);
-    if (users_server_response.code == ERROR) {
-        printf(users_server_response.payload.description);
-    }
+    int us_success = kill_connection(users_server_connection_info.soc, users_server_connection_info.id, "SU");
+    int ls_success = kill_connection(loc_server_connection_info.soc, loc_server_connection_info.id, "SL");
 
-
-
-    message request_to_lc = {
-        .code = REQ_DISC,
-        .payload = {
-            .client_id = loc_server_connection_info.id
-        }
-    };
+    if (us_success == 0 && ls_success == 0) exit(0);
 }
 
 void handle_command(
@@ -79,7 +83,7 @@ void handle_command(
     server_connection_info loc_server_connection_info
 ) {
     if (strcmp(command, "kill\n") == 0) {
-        kill(users_server_connection_info, users_server_connection_info);
+        kill(users_server_connection_info, loc_server_connection_info);
     }
 }
 
