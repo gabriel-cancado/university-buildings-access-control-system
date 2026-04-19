@@ -5,6 +5,11 @@
 #include <sys/socket.h>
 #include "../include/common.h"
 
+typedef struct {
+    int soc;
+    int id;
+} server_connection_info;
+
 void usage_exit(int argc, char** argv) {
     char* progam_name = argv[0];
     printf("usage: %s <servers IP> <users server port> <loc server port> <loc_id>\n", progam_name);
@@ -13,18 +18,69 @@ void usage_exit(int argc, char** argv) {
     exit(EXIT_FAILURE);
 }
 
-int open_connection(char* server_addr_str, char* server_port_str) {
+server_connection_info open_connection(char* server_addr_str, char* server_port_str, int loc_id) {
     struct sockaddr_storage storage;
-    int success = addr_parse(server_addr_str, server_port_str, &storage) == 0;
+    int success = addr_parse(server_addr_str, server_port_str, &storage);
     if (success == -1) log_exit("Invalid server address. Valid types are IPv4 and IPv6");
 
     int soc = socket(storage.ss_family, SOCK_STREAM, 0);
     if (soc == -1) log_exit("Error creating socket");
 
-    success = connect(soc, &storage, sizeof(storage));
-    if (!success) log_exit("Could not connect to server " + *server_addr_str + ':' + *server_port_str);
+    success = connect(soc, (struct sockaddr *)&storage, sizeof(storage));
+    if (success == -1) log_exit("Could not connect to server");
 
-    return soc;
+    message msg = {
+        .code = REQ_CONN,
+        .payload = {
+            .loc_id = loc_id
+        }
+    };
+
+    message response = send_message(soc, msg, true);
+    if (response.code == ERROR) error_exit(response.payload.description);
+
+    server_connection_info connection_info = {
+        .id = response.payload.client_id,
+        .soc = soc
+    };
+    return connection_info;
+}
+
+message kill_connection(server_soc, client_id) {
+    message disconnect_request = {
+        .code = REQ_DISC,
+        .payload = {
+            .client_id = client_id
+        }
+    };
+
+    return send_message(server_soc, disconnect_request, true);
+}
+
+void kill(server_connection_info users_server_connection_info, server_connection_info loc_server_connection_info) {
+    message users_server_response = kill_connection(users_server_connection_info.soc, users_server_connection_info.id);
+    if (users_server_response.code == ERROR) {
+        printf(users_server_response.payload.description);
+    }
+
+
+
+    message request_to_lc = {
+        .code = REQ_DISC,
+        .payload = {
+            .client_id = loc_server_connection_info.id
+        }
+    };
+}
+
+void handle_command(
+    char* command,
+    server_connection_info users_server_connection_info,
+    server_connection_info loc_server_connection_info
+) {
+    if (strcmp(command, "kill\n") == 0) {
+        kill(users_server_connection_info, users_server_connection_info);
+    }
 }
 
 void main (int argc, char** argv) {
@@ -33,8 +89,16 @@ void main (int argc, char** argv) {
     int loc_id = atoi(argv[4]);
     if (loc_id < 0 || loc_id > 10) error_exit("Invalid argument");
 
-    int users_server_socket = open_connection(argv[1], argv[2]);
-    int loc_server_socket = open_connection(argv[1], argv[3]);
+    server_connection_info users_server_connection_info = open_connection(argv[1], argv[2], loc_id);
+    printf("SU New ID: %d\n", users_server_connection_info.id);
 
-    while(1) {};
+    server_connection_info loc_server_connection_info = open_connection(argv[1], argv[3], loc_id);
+    printf("SL New ID: %d\n", loc_server_connection_info.id);
+
+    while(1) {
+        char command[1024];
+        fgets(command, sizeof(command), stdin);
+
+        handle_command(command, users_server_connection_info, loc_server_connection_info);
+    };
 }

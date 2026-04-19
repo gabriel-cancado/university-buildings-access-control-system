@@ -45,6 +45,10 @@ int addr_parse(char* addr_str, char* port_str, struct sockaddr_storage *storage)
     return -1;
 }
 
+/**
+ * p2p communications were implemented as blocking because the application protocol
+ *  doesn`t provide a way to identify a request-response pair.
+ */
 message send_message(int soc, message msg, bool should_wait_response) {
     int sended_bytes = send(soc, &msg, sizeof(msg), 0);
     if (sended_bytes == -1) log_exit("Error sending message");
@@ -60,4 +64,26 @@ message send_message(int soc, message msg, bool should_wait_response) {
 
 int generate_random_id() {
     return (rand() % 9000) + 1000;
+}
+
+char* get_message_description(int type, int code) {
+    if (type == OK) {
+        switch (code) {
+            case 1: return "Successful disconnect";
+            case 2: return "Successful create";
+            case 3: return "Successful update";
+        }
+    }
+
+    if (type != ERROR) log_exit("Invalid message type");
+
+    switch (code) {
+        case 1: return "Peer limit exceeded";
+        case 2: return "Peer not found";
+        case 9: return "Client limit exceeded";
+        case 10: return "Client not found";
+        case 17: return "User limit exceeded";
+        case 18: return "User not found";
+        case 19: return "Permission denied";
+    }
 }

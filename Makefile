@@ -1,6 +1,6 @@
 CC = gcc
 SRC_DIR = src
-OBJ_DIR = bin
+OBJ_DIR = build
 BIN_DIR = bin
 
 all: $(BIN_DIR)/server $(BIN_DIR)/client
@@ -8,7 +8,7 @@ all: $(BIN_DIR)/server $(BIN_DIR)/client
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) -c $< -o $@
 
-$(BIN_DIR)/server: $(OBJ_DIR)/server.o $(OBJ_DIR)/common.o
+$(BIN_DIR)/server: $(OBJ_DIR)/server.o $(OBJ_DIR)/common.o $(OBJ_DIR)/request_handlers.o
 	$(CC) $^ -o $@
 
 $(BIN_DIR)/client: $(OBJ_DIR)/client.o $(OBJ_DIR)/common.o

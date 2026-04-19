@@ -12,9 +12,9 @@
 #include <unistd.h>
 #include <time.h>
 
-#define MAX_USERS 30;
-#define MAX_CLIENTS 10;
-#define MAX_PEERS 1;
+#define MAX_USERS 30
+#define MAX_CLIENTS 10
+#define MAX_PEERS 1
 
 #define DIRECTION_IN 0
 #define DIRECTION_OUT 1
@@ -55,6 +55,7 @@ typedef struct {
     bool is_special;
     int direction;
     char description[DESCRIPTION_MAX_SIZE];
+    int description_code;
 } message_payload;
 
 typedef struct {
@@ -79,6 +80,19 @@ typedef struct {
     int soc;
 } p2p_connection_info;
 
+typedef struct {
+    int id;
+    int soc;
+    int loc;
+} client;
+
+typedef struct {
+    int connections_listener_socket;
+    int connected_clients;
+    client clients[MAX_CLIENTS];
+    int client_id_sequence;
+} clients_connection_info;
+
 void error_exit(char* msg);
 
 void log_exit(char* msg);
@@ -91,3 +105,5 @@ int addr_parse(char* addr_str, char* port_str, struct sockaddr_storage *storage)
 message send_message(int soc, message msg, bool should_wait_response);
 
 int generate_random_id();
+
+char* get_message_description(int type, int code);
