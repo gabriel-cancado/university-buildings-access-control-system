@@ -58,3 +58,5 @@ user_auth* find_user_auth(users_server_database* db, int user_id);
 void handle_REQ_USRACCESS(users_server_database* db, client c, message_payload request_payload, p2p_connection_info* peer_connection_info);
 
 void handle_REQ_LOCREG(p2p_connection_info* peer_connection_info, message_payload request_payload, loc_server_database* db);
+
+void handle_REQ_USRLOC(loc_server_database* db, client c, message_payload request_payload);

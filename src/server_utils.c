@@ -315,3 +315,24 @@ void handle_REQ_LOCREG(p2p_connection_info* peer_connection_info, message_payloa
     };
     send_message(peer_connection_info->soc, response, false);
 }
+
+void handle_REQ_USRLOC(loc_server_database* db, client c, message_payload request_payload) {
+    int user_id = request_payload.user_id;
+    printf("REQ_USRLOC %d\n", user_id);
+
+    user_loc* user = find_user_loc(db, user_id);
+    if (user == NULL) {
+        message response = {
+            .code = ERROR,
+            .payload = { .description_code = 18 }
+        };
+        send_message(c.soc, response, false);
+        return;
+    }
+
+    message response = {
+        .code = RES_USRLOC,
+        .payload = { .loc_id = user->last_location }
+    };
+    send_message(c.soc, response, false);
+}

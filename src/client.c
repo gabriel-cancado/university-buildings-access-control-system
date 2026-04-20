@@ -121,6 +121,21 @@ void command_in_out(server_connection_info users_server_connection_info, int use
     printf("Ok. Last location: %d\n", response.payload.loc_id);
 }
 
+void command_find(server_connection_info loc_server_connection_info, int user_id) {
+    message request = {
+        .code = REQ_USRLOC,
+        .payload = { .user_id = user_id }
+    };
+    
+    message response = send_message(loc_server_connection_info.soc, request, true);
+    if (response.code == ERROR) {
+        printf("%s\n", get_message_description(ERROR, response.payload.description_code));
+        return;
+    }
+
+    printf("Current location: %d\n", response.payload.loc_id);
+}
+
 void handle_input(
     char* input,
     server_connection_info users_server_connection_info,
@@ -145,6 +160,17 @@ void handle_input(
         int user_id = atoi(strtok(NULL, " "));
         command_in_out(users_server_connection_info, user_id, DIRECTION_IN);
         return;
+    }
+
+    if (strcmp(command, "out") == 0) {
+        int user_id = atoi(strtok(NULL, " "));
+        command_in_out(users_server_connection_info, user_id, DIRECTION_OUT);
+        return;
+    }
+
+    if (strcmp(command, "find") == 0) {
+        int user_id = atoi(strtok(NULL, " "));
+        command_find(loc_server_connection_info, user_id);
     }
 }
 

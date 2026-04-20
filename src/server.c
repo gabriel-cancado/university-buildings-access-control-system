@@ -161,6 +161,10 @@ void handle_client_request(clients_connection_info* clients_info, int clientInde
         case REQ_USRACCESS:
             handle_REQ_USRACCESS(&us_db, c, request.payload, peer_connection_info);
             break;
+
+        case REQ_USRLOC:
+            handle_REQ_USRLOC(&ls_db, c, request.payload);
+            break;
     }
 }
 
