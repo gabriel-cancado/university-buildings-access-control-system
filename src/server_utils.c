@@ -121,7 +121,7 @@ p2p_connection_info request_connection_to_peer(int soc, struct sockaddr_in6 addr
     return connection_info;
 }
 
-void handle_REQDISCPEER (p2p_connection_info* peer_connection_info, message request) {
+void handle_REQ_DISCPEER (p2p_connection_info* peer_connection_info, message request) {
     int disconnect_requested_id = request.payload.peer_id;
     if (disconnect_requested_id != peer_connection_info->peer_id) {
         message msg = {
@@ -166,7 +166,7 @@ void remove_client(clients_connection_info* clients_info, int client_id) {
     clients_info->connected_clients--;
 }
 
-void handle_REQDISC(clients_connection_info* clients_info, client c, message request) {
+void handle_REQ_DISC(clients_connection_info* clients_info, client c, message request) {
     bool isSameId = request.payload.client_id == c.id;
     if (!isSameId) {
         message response = {
@@ -204,7 +204,7 @@ void add_user_auth(users_server_database* db, user_auth* new_user) {
     db->active_users++;
 }
 
-void handle_REQUSRADD(users_server_database* db, client c, message_payload request_payload) {
+void handle_REQ_USRADD(users_server_database* db, client c, message_payload request_payload) {
     int user_id = request_payload.user_id;
     int is_special = request_payload.is_special;
 
@@ -229,4 +229,89 @@ void handle_REQUSRADD(users_server_database* db, client c, message_payload reque
 
     message response = { .code = OK, .payload = { .description_code = 2 } };
     send_message(c.soc, response, false);
+}
+
+void handle_REQ_USRACCESS(
+    users_server_database* db,
+    client c,
+    message_payload request_payload,
+    p2p_connection_info* peer_connection_info
+) {
+    int user_id = request_payload.user_id;
+    int direction = request_payload.direction;
+    
+    char* directionStr = direction == DIRECTION_IN ? "in" : "out";
+    printf("REQ_USRACCESS %d %s\n", user_id, directionStr);
+
+    user_auth* user = find_user_auth(db, user_id);
+    if (user == NULL) {
+        message response = { .code = ERROR, .payload = { .description_code = 18 } };
+        send_message(c.soc, response, false);
+        return;
+    }
+
+    int loc_id = direction == DIRECTION_IN ? c.loc : -1;
+    message request_to_ls = {
+        .code = REQ_LOCREG,
+        .payload = {
+            .user_id = user_id,
+            .loc_id = loc_id
+        }
+    };
+    message peer_response = send_message(peer_connection_info->soc, request_to_ls, true);
+    if (peer_response.code != RES_LOCREG) log_exit("Invalid response");
+
+    int old_loc_id = peer_response.payload.loc_id;
+
+    message response_to_client = {
+        .code = RES_USRACCESS,
+        .payload = {
+            .loc_id = old_loc_id
+        }
+    };
+    send_message(c.soc, response_to_client, false);
+}
+
+user_loc* find_user_loc(loc_server_database* db, int user_id) {
+    for (int i = 0; i < db->active_users; i++) {
+        if (db->users_loc[i].user_id == user_id) {
+            return &db->users_loc[i];
+        }
+    }
+
+    return NULL;
+}
+
+void add_user_loc(loc_server_database* db, user_loc* new_user) {
+    db->users_loc[db->active_users] = *new_user;
+    db->active_users++;
+}
+
+void handle_REQ_LOCREG(p2p_connection_info* peer_connection_info, message_payload request_payload, loc_server_database* db) {
+    int user_id = request_payload.user_id;
+    int loc_id = request_payload.loc_id;
+
+    printf("REQ_LOCREG %d %d\n", user_id, loc_id);
+
+    user_loc* user = find_user_loc(db, user_id);
+    if (user == NULL) {
+        user_loc new_user_loc = { .user_id = user_id, .last_location = loc_id };
+        add_user_loc(db, &new_user_loc);
+
+        message response = {
+            .code = RES_LOCREG,
+            .payload = { .loc_id = -1 }
+        };
+        send_message(peer_connection_info->soc, response, false);
+        return;
+    }
+
+    int old_loc_id = user->last_location;
+    user->last_location = loc_id;
+    
+    message response = {
+        .code = RES_LOCREG,
+        .payload = { .loc_id = old_loc_id }
+    };
+    send_message(peer_connection_info->soc, response, false);
 }

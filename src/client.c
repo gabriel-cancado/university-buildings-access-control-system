@@ -103,6 +103,24 @@ void command_add(server_connection_info users_server_connection_info, int user_i
     printf("%s\n", get_message_description(ERROR, response.payload.description_code));
 }
 
+void command_in_out(server_connection_info users_server_connection_info, int user_id, int direction) {
+    message request = {
+        .code = REQ_USRACCESS,
+        .payload = {
+            .user_id = user_id,
+            .direction = direction
+        }
+    };
+
+    message response = send_message(users_server_connection_info.soc, request, true);
+    if (response.code == ERROR) {
+        printf("%s\n", get_message_description(ERROR, response.payload.description_code));
+        return;
+    }
+
+    printf("Ok. Last location: %d\n", response.payload.loc_id);
+}
+
 void handle_input(
     char* input,
     server_connection_info users_server_connection_info,
@@ -113,12 +131,20 @@ void handle_input(
 
     if (strcmp(command, "kill") == 0) {
         command_kill(users_server_connection_info, loc_server_connection_info);
+        return;
     }
 
     if (strcmp(command, "add") == 0) {
         int user_id = atoi(strtok(NULL, " "));
         int is_special = atoi(strtok(NULL, " "));
         command_add(users_server_connection_info, user_id, is_special);
+        return;
+    }
+
+    if (strcmp(command, "in") == 0) {
+        int user_id = atoi(strtok(NULL, " "));
+        command_in_out(users_server_connection_info, user_id, DIRECTION_IN);
+        return;
     }
 }
 

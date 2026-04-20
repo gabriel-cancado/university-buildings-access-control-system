@@ -17,6 +17,11 @@ typedef struct {
 } user_loc;
 
 typedef struct {
+    user_loc users_loc[MAX_USERS];
+    int active_users;
+} loc_server_database;
+
+typedef struct {
     bool connected;
     int peer_id;
     int id_on_peer;
@@ -42,10 +47,14 @@ p2p_connection_info request_connection_to_peer(int soc, struct sockaddr_in6 addr
 
 void kill_p2p_connection(p2p_connection_info peer_connection_info, int p2p_connections_listener_socket);
 
-void handle_REQDISCPEER (p2p_connection_info* peer_connection_info, message request);
+void handle_REQ_DISCPEER(p2p_connection_info* peer_connection_info, message request);
 
-void handle_REQDISC(clients_connection_info* clients_info, client c, message request);
+void handle_REQ_DISC(clients_connection_info* clients_info, client c, message request);
 
-void handle_REQUSRADD(users_server_database* db, client c, message_payload request_payload);
+void handle_REQ_USRADD(users_server_database* db, client c, message_payload request_payload);
 
 user_auth* find_user_auth(users_server_database* db, int user_id);
+
+void handle_REQ_USRACCESS(users_server_database* db, client c, message_payload request_payload, p2p_connection_info* peer_connection_info);
+
+void handle_REQ_LOCREG(p2p_connection_info* peer_connection_info, message_payload request_payload, loc_server_database* db);

@@ -3,7 +3,8 @@
 
 #define CONNECTION_QUEUE_MAX_LENGTH 10
 
-users_server_database su_db = { .active_users = 0 };
+users_server_database us_db = { .active_users = 0 };
+loc_server_database ls_db = { .active_users = 0 };
 
 void usage_exit(int argc, char** argv) {
     char* progam_name = argv[0];
@@ -61,7 +62,12 @@ void handle_request_from_peer(p2p_connection_info* peer_connection_info) {
     message request = receive_message(peer_connection_info->soc);
 
     if (request.code == REQ_DISCPEER) {
-        handle_REQDISCPEER(peer_connection_info, request);
+        handle_REQ_DISCPEER(peer_connection_info, request);
+        return;
+    }
+
+    if (request.code == REQ_LOCREG) {
+        handle_REQ_LOCREG(peer_connection_info, request.payload, &ls_db);
         return;
     }
 }
@@ -139,17 +145,21 @@ void handle_client_connection_request(clients_connection_info* clients_info) {
     send_message(new_client_socket, response, false);
 }
 
-void handle_client_request(clients_connection_info* clients_info, int clientIndex) {
+void handle_client_request(clients_connection_info* clients_info, int clientIndex, p2p_connection_info* peer_connection_info) {
     client c = clients_info->clients[clientIndex];
     message request = receive_message(c.soc);
 
     switch (request.code) {
         case REQ_DISC:
-            handle_REQDISC(clients_info, c, request);
+            handle_REQ_DISC(clients_info, c, request);
             break;
 
         case REQ_USRADD:
-            handle_REQUSRADD(&su_db, c, request.payload);
+            handle_REQ_USRADD(&us_db, c, request.payload);
+            break;
+
+        case REQ_USRACCESS:
+            handle_REQ_USRACCESS(&us_db, c, request.payload, peer_connection_info);
             break;
     }
 }
@@ -218,7 +228,7 @@ void handle_requests_loop(
         for (int i = 0; i < clients_info.connected_clients; i++) {
             bool isClientRequest = FD_ISSET(clients_info.clients[i].soc, &monitored_sockets);
             if (isClientRequest) {
-                handle_client_request(&clients_info, i);
+                handle_client_request(&clients_info, i, &peer_connection_info);
                 break;
             }
         }
