@@ -1,7 +1,9 @@
 #include "../include/common.h"
-#include "../include/request_handlers.h"
+#include "../include/server_utils.h"
 
 #define CONNECTION_QUEUE_MAX_LENGTH 10
+
+users_server_database su_db = { .active_users = 0 };
 
 void usage_exit(int argc, char** argv) {
     char* progam_name = argv[0];
@@ -141,8 +143,14 @@ void handle_client_request(clients_connection_info* clients_info, int clientInde
     client c = clients_info->clients[clientIndex];
     message request = receive_message(c.soc);
 
-    if (request.code == REQ_DISC) {
-        handle_REQDISC(clients_info, c, request);
+    switch (request.code) {
+        case REQ_DISC:
+            handle_REQDISC(clients_info, c, request);
+            break;
+
+        case REQ_USRADD:
+            handle_REQUSRADD(&su_db, c, request.payload);
+            break;
     }
 }
 

@@ -1,4 +1,5 @@
 #include "../include/common.h"
+#include "../include/server_utils.h"
 
 #define MAXIMUM_AMOUNT_OF_PEERS 1
 
@@ -186,4 +187,46 @@ void handle_REQDISC(clients_connection_info* clients_info, client c, message req
 
     remove_client(clients_info, c.id);
     printf("Client %d removed (Loc %d)\n", c.id, c.loc);
+}
+
+user_auth* find_user_auth(users_server_database* db, int user_id) {
+    for (int i = 0; i < db->active_users; i++) {
+        if (db->users_auth[i].user_id == user_id) {
+            return &db->users_auth[i];
+        }
+    }
+
+    return NULL;
+}
+
+void add_user_auth(users_server_database* db, user_auth* new_user) {
+    db->users_auth[db->active_users] = *new_user;
+    db->active_users++;
+}
+
+void handle_REQUSRADD(users_server_database* db, client c, message_payload request_payload) {
+    int user_id = request_payload.user_id;
+    int is_special = request_payload.is_special;
+
+    printf("REQ_USRADD %d %d\n", user_id, is_special);
+
+    user_auth* user = find_user_auth(db, user_id);
+    if (user != NULL) {
+        user->is_special = is_special;
+        message response = { .code = OK, .payload = { .description_code = 3 } };
+        send_message(c.soc, response, false);
+        return;
+    }
+
+    if (db->active_users >= MAX_USERS) {
+        message response = { .code = ERROR, .payload = { .description_code = 17 } };
+        send_message(c.soc, response, false);
+        return;
+    }
+
+    user_auth new_user = { .user_id = user_id, .is_special = is_special };
+    add_user_auth(db, &new_user);
+
+    message response = { .code = OK, .payload = { .description_code = 2 } };
+    send_message(c.soc, response, false);
 }

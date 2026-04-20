@@ -53,13 +53,10 @@ message send_message(int soc, message msg, bool should_wait_response) {
     int sended_bytes = send(soc, &msg, sizeof(msg), 0);
     if (sended_bytes == -1) log_exit("Error sending message");
 
-    message response = { .code = EMPTY };
-    if (!should_wait_response) return response;
+    message no_response = { .code = EMPTY };
+    if (!should_wait_response) return no_response;
     
-    int received_bytes = recv(soc, &response, sizeof(response), 0);
-    if (received_bytes == -1) log_exit("Error receiving message");
-
-    return response;
+    return receive_message(soc);
 }
 
 message receive_message(int soc) {

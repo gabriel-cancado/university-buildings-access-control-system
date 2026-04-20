@@ -63,36 +63,6 @@ typedef struct {
     message_payload payload;
 } message;
 
-typedef struct {
-    char uid[11];
-    int is_special;
-} user_auth;
-
-typedef struct {
-    char uid[11];
-    int last_location;
-} user_loc;
-
-typedef struct {
-    bool connected;
-    int peer_id;
-    int id_on_peer;
-    int soc;
-} p2p_connection_info;
-
-typedef struct {
-    int id;
-    int soc;
-    int loc;
-} client;
-
-typedef struct {
-    int connections_listener_socket;
-    int connected_clients;
-    client clients[MAX_CLIENTS];
-    int client_id_sequence;
-} clients_connection_info;
-
 void error_exit(char* msg);
 
 void log_exit(char* msg);

@@ -70,20 +70,55 @@ int kill_connection(int server_soc, int client_id, char* server_name) {
     return 0;
 }
 
-void kill(server_connection_info users_server_connection_info, server_connection_info loc_server_connection_info) {
+void command_kill(server_connection_info users_server_connection_info, server_connection_info loc_server_connection_info) {
     int us_success = kill_connection(users_server_connection_info.soc, users_server_connection_info.id, "SU");
     int ls_success = kill_connection(loc_server_connection_info.soc, loc_server_connection_info.id, "SL");
 
     if (us_success == 0 && ls_success == 0) exit(0);
 }
 
-void handle_command(
-    char* command,
+void command_add(server_connection_info users_server_connection_info, int user_id, int is_special) {
+    message request = {
+        .code = REQ_USRADD,
+        .payload = {
+            .user_id = user_id,
+            .is_special = is_special
+        }
+    };
+
+    message response = send_message(users_server_connection_info.soc, request, true);
+
+    if (response.code != OK && response.code != ERROR) log_exit("Invalid response");
+
+    if (response.code == OK && response.payload.description_code == 3) {
+        printf("User updated: %d\n", user_id);
+        return;
+    }
+
+    if (response.code == OK && response.payload.description_code == 2) {
+        printf("New user added: %d\n", user_id);
+        return;
+    }
+
+    printf("%s\n", get_message_description(ERROR, response.payload.description_code));
+}
+
+void handle_input(
+    char* input,
     server_connection_info users_server_connection_info,
     server_connection_info loc_server_connection_info
 ) {
-    if (strcmp(command, "kill\n") == 0) {
-        kill(users_server_connection_info, loc_server_connection_info);
+    input = strtok(input, "\n");
+    char* command = strtok(input, " ");
+
+    if (strcmp(command, "kill") == 0) {
+        command_kill(users_server_connection_info, loc_server_connection_info);
+    }
+
+    if (strcmp(command, "add") == 0) {
+        int user_id = atoi(strtok(NULL, " "));
+        int is_special = atoi(strtok(NULL, " "));
+        command_add(users_server_connection_info, user_id, is_special);
     }
 }
 
@@ -100,9 +135,9 @@ void main (int argc, char** argv) {
     printf("SL New ID: %d\n", loc_server_connection_info.id);
 
     while(1) {
-        char command[1024];
-        fgets(command, sizeof(command), stdin);
+        char input[1024];
+        fgets(input, sizeof(input), stdin);
 
-        handle_command(command, users_server_connection_info, loc_server_connection_info);
+        handle_input(input, users_server_connection_info, loc_server_connection_info);
     };
 }
