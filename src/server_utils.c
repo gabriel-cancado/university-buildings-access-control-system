@@ -19,7 +19,7 @@ p2p_connection_info handle_pairing_requests(int listener_socket) {
         message msg = {
             .code = ERROR,
             .payload = {
-                .description = "Peer limit exceeded"
+                .description_code = 1
             }
         };
         
@@ -70,13 +70,13 @@ void kill_p2p_connection(p2p_connection_info peer_connection_info, int p2p_conne
 
     message response = send_message(peer_connection_info.soc, msg, true);
     if (response.code == ERROR) {
-        printf("%s\n", response.payload.description);
+        printf("%s\n", get_message_description(ERROR, response.payload.description_code));
         exit(EXIT_FAILURE);
     }
 
     if (response.code != OK) log_exit("Unexpected response code");
 
-    printf("%s\n", response.payload.description);
+    printf("%s\n", get_message_description(OK, response.payload.description_code));
     printf("Peer %d disconnected\n", peer_connection_info.peer_id);
 
     exit(EXIT_SUCCESS);
@@ -93,7 +93,7 @@ p2p_connection_info request_connection_to_peer(int soc, struct sockaddr_in6 addr
 
     message response = send_message(soc, request, true);
     if (response.code == ERROR) {
-        printf("%s\n", response.payload.description);
+        printf("%s\n", get_message_description(ERROR, response.payload.description_code));
         exit(EXIT_FAILURE);
     }
 
@@ -127,7 +127,7 @@ void handle_REQ_DISCPEER (p2p_connection_info* peer_connection_info, message req
         message msg = {
             .code = ERROR,
             .payload = {
-                .description = "Peer not found"
+                .description_code = 2
             }
         };
         send_message(peer_connection_info->soc, msg, false);
@@ -137,7 +137,7 @@ void handle_REQ_DISCPEER (p2p_connection_info* peer_connection_info, message req
     message msg = {
         .code = OK,
         .payload = {
-            .description = "Successful disconnect"
+            .description_code = 1
         }
     };
     send_message(peer_connection_info->soc, msg, false);
@@ -335,4 +335,66 @@ void handle_REQ_USRLOC(loc_server_database* db, client c, message_payload reques
         .payload = { .loc_id = user->last_location }
     };
     send_message(c.soc, response, false);
+}
+
+array_list filter_users(loc_server_database* db, int loc_id) {
+    array_list result = { .length = 0 };
+    for (int i = 0; i < db->active_users; i++) {
+        user_loc u = db->users_loc[i];
+
+        if (u.last_location == loc_id) {
+            result.ids[result.length] = u.user_id;
+            result.length++;
+        }
+    }
+
+    return result;
+}
+
+void handle_REQ_LOCLIST(p2p_connection_info* peer_connection_info, loc_server_database* db, client c, message_payload request_payload) {
+    int user_id = request_payload.user_id;
+    int loc_id = request_payload.loc_id;
+
+    printf("REQ_LOCLIST %d %d\n", user_id, loc_id);
+
+    message request_to_peer = {
+        .code = REQ_USRAUTH,
+        .payload = { .user_id = user_id }
+    };
+    message peer_response = send_message(peer_connection_info->soc, request_to_peer, true);
+
+    int is_special = peer_response.payload.is_special;
+    if (is_special == 0) {
+        message response = {
+            .code = ERROR,
+            .payload = { .description_code = 19 }
+        };
+        send_message(c.soc, response, false);
+        return;
+    }
+
+    array_list users_in_location = filter_users(db, loc_id);    
+    printf("Passou do filter\n");
+    message response = {
+        .code = RES_LOCLIST,
+        .payload = {
+            .users_ids = users_in_location
+        }
+    };
+
+    send_message(c.soc, response, false);
+}
+
+void handle_REQ_USRAUTH(p2p_connection_info* peer_connection_info, message_payload request_payload, users_server_database* db) {
+    int user_id = request_payload.user_id;
+    printf("REQ_USRAUTH %d\n", user_id);
+
+    user_auth* user = find_user_auth(db, user_id);
+    if (user == NULL) log_exit("User not found");
+
+    message response = {
+        .code = RES_USRAUTH,
+        .payload = { .is_special = user->is_special }
+    };
+    send_message(peer_connection_info->soc, response, false);
 }

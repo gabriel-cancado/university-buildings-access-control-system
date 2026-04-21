@@ -45,16 +45,19 @@
 #define OK 0
 #define EMPTY -1
 
-#define DESCRIPTION_MAX_SIZE 128
+typedef struct {
+    int ids[MAX_USERS];
+    int length;
+} array_list;
 
 typedef struct {
     int peer_id;
     int client_id;
     int loc_id;
     int user_id;
+    array_list users_ids;
     bool is_special;
     int direction;
-    char description[DESCRIPTION_MAX_SIZE];
     int description_code;
 } message_payload;
 

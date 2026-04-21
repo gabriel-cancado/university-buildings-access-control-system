@@ -61,14 +61,18 @@ void handle_keyboard_entry(p2p_connection_info peer_connection_info, int p2p_con
 void handle_request_from_peer(p2p_connection_info* peer_connection_info) {
     message request = receive_message(peer_connection_info->soc);
 
-    if (request.code == REQ_DISCPEER) {
-        handle_REQ_DISCPEER(peer_connection_info, request);
-        return;
-    }
+    switch (request.code) {
+        case REQ_DISCPEER:
+            handle_REQ_DISCPEER(peer_connection_info, request);
+            break;
 
-    if (request.code == REQ_LOCREG) {
-        handle_REQ_LOCREG(peer_connection_info, request.payload, &ls_db);
-        return;
+        case REQ_LOCREG:
+            handle_REQ_LOCREG(peer_connection_info, request.payload, &ls_db);
+            break;
+
+        case REQ_USRAUTH:
+            handle_REQ_USRAUTH(peer_connection_info, request.payload, &us_db);
+            break;
     }
 }
 
@@ -120,7 +124,7 @@ void handle_client_connection_request(clients_connection_info* clients_info) {
         message msg = {
             .code = ERROR,
             .payload = {
-                .description = "Client limit exceeded"
+                .description_code = 9
             }
         };
         send_message(new_client_socket, msg, false);
@@ -164,6 +168,10 @@ void handle_client_request(clients_connection_info* clients_info, int clientInde
 
         case REQ_USRLOC:
             handle_REQ_USRLOC(&ls_db, c, request.payload);
+            break;
+
+        case REQ_LOCLIST:
+            handle_REQ_LOCLIST(peer_connection_info, &ls_db, c, request.payload);
             break;
     }
 }

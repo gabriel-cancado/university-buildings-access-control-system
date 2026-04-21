@@ -60,3 +60,7 @@ void handle_REQ_USRACCESS(users_server_database* db, client c, message_payload r
 void handle_REQ_LOCREG(p2p_connection_info* peer_connection_info, message_payload request_payload, loc_server_database* db);
 
 void handle_REQ_USRLOC(loc_server_database* db, client c, message_payload request_payload);
+
+void handle_REQ_LOCLIST(p2p_connection_info* peer_connection_info, loc_server_database* db, client c, message_payload request_payload);
+
+void handle_REQ_USRAUTH(p2p_connection_info* peer_connection_info, message_payload request_payload, users_server_database* db);

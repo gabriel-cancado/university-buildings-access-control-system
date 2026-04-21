@@ -37,7 +37,7 @@ server_connection_info open_connection(char* server_addr_str, char* server_port_
     };
 
     message response = send_message(soc, msg, true);
-    if (response.code == ERROR) error_exit(response.payload.description);
+    if (response.code == ERROR) error_exit(get_message_description(ERROR, response.payload.description_code));
 
     server_connection_info connection_info = {
         .id = response.payload.client_id,
@@ -136,6 +136,35 @@ void command_find(server_connection_info loc_server_connection_info, int user_id
     printf("Current location: %d\n", response.payload.loc_id);
 }
 
+void command_inspect(server_connection_info loc_server_connection_info, int user_id, int loc_id) {\
+    message request = {
+        .code = REQ_LOCLIST,
+        .payload = {
+            .user_id = user_id,
+            .loc_id = loc_id
+        }
+    };
+
+    message response = send_message(loc_server_connection_info.soc, request, true);
+    if (response.code == ERROR) {
+        printf("%s\n", get_message_description(ERROR, response.payload.description_code));
+        return;
+    }
+
+    array_list users_in_location = response.payload.users_ids;
+
+    char list_string[1024];
+    strcpy(list_string, "List of people at the specified location:");
+    int offset = strlen(list_string);
+
+    for (int i = 0; i < users_in_location.length; i++) {
+        int bytes_writen = snprintf(list_string + offset, sizeof(list_string) - offset, " %d", users_in_location.ids[i]);
+        offset += bytes_writen;
+    }
+
+    printf("%s\n", list_string);
+}
+
 void handle_input(
     char* input,
     server_connection_info users_server_connection_info,
@@ -171,6 +200,12 @@ void handle_input(
     if (strcmp(command, "find") == 0) {
         int user_id = atoi(strtok(NULL, " "));
         command_find(loc_server_connection_info, user_id);
+    }
+
+    if (strcmp(command, "inspect") == 0) {
+        int user_id = atoi(strtok(NULL, " "));
+        int loc_id = atoi(strtok(NULL, " "));
+        command_inspect(loc_server_connection_info, user_id, loc_id);
     }
 }
 
